@@ -1,4 +1,4 @@
-name: Rassegna Stampa IPT
+name: daily.yml
 
 on:
   schedule:
