@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
-Rassegna stampa automatica IPT noleggio auto.
-Versione con deduplicazione: legge lo storico delle ultime rassegne
-e chiede a Claude di NON ripetere temi gia' coperti.
+Rassegna stampa IPT noleggio auto - frequenza ogni 10 giorni.
 """
 
 import os
@@ -20,14 +18,18 @@ GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 MITTENTE_EMAIL = "alberto.checchin@gmail.com"
 MITTENTE_NOME = "Rassegna Stampa IPT"
 DESTINATARI = ["alberto.checchin@gmail.com", "luca.checchin98@gmail.com"]
-GIORNI_STORICO = 7
+GIORNI_COPERTURA = 10
+GIORNI_STORICO = 35  # cattura 2-3 rassegne precedenti
 
 # --- DATE ---
 MESI_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
            "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
 oggi_date = datetime.date.today()
+inizio_periodo = oggi_date - datetime.timedelta(days=GIORNI_COPERTURA)
+
 OGGI = oggi_date.strftime("%d/%m/%Y")
 OGGI_ESTESA = f"{oggi_date.day} {MESI_IT[oggi_date.month - 1]} {oggi_date.year}"
+INIZIO_ESTESA = f"{inizio_periodo.day} {MESI_IT[inizio_periodo.month - 1]} {inizio_periodo.year}"
 
 # --- STORICO ---
 STORICO_DIR = pathlib.Path("rassegne")
@@ -35,7 +37,6 @@ STORICO_DIR.mkdir(exist_ok=True)
 
 
 def carica_storico():
-    """Carica le rassegne degli ultimi N giorni."""
     storico = []
     for i in range(1, GIORNI_STORICO + 1):
         data = oggi_date - datetime.timedelta(days=i)
@@ -49,16 +50,17 @@ def carica_storico():
 
 
 # --- PROMPT ---
-PROMPT = f"""Sei un analista che prepara una rassegna stampa GIORNALIERA per una societa' di domiciliazione a Bolzano.
+PROMPT = f"""Sei un analista che prepara una rassegna stampa per una societa' di domiciliazione a Bolzano.
 
-DATA DI OGGI: {OGGI_ESTESA}
+PERIODO COPERTO: dal {INIZIO_ESTESA} al {OGGI_ESTESA} (ultimi {GIORNI_COPERTURA} giorni)
+FREQUENZA: questa rassegna esce ogni {GIORNI_COPERTURA} giorni.
 
-REGOLA FONDAMENTALE - SOLO NOVITA' DEL GIORNO:
-Qui sotto trovi le rassegne degli ultimi giorni. Devi includere SOLO notizie genuinamente NUOVE rispetto a quanto gia' coperto.
+REGOLA FONDAMENTALE - SOLO NOVITA' DEL PERIODO:
+Qui sotto trovi le rassegne precedenti gia' inviate. Devi includere SOLO notizie genuinamente NUOVE rispetto a quanto gia' coperto.
 
 - NON ripetere notizie, temi o analisi gia' presenti nelle rassegne precedenti.
-- Se l'unica novita' di oggi e' un aggiornamento minore su un tema gia' coperto, segnalalo come AGGIORNAMENTO in una riga e cita la data in cui il tema e' apparso la prima volta.
-- Se OGGI non ci sono notizie nuove, scrivilo esplicitamente.
+- Se un tema gia' coperto ha avuto evoluzioni significative negli ultimi {GIORNI_COPERTURA} giorni, segnalalo come AGGIORNAMENTO e cita la data della rassegna in cui era apparso.
+- Se nel periodo non ci sono notizie nuove, scrivilo esplicitamente.
 - Meglio una rassegna corta e onesta che una piena di ripetizioni.
 
 --- STORICO RASSEGNE PRECEDENTI ---
@@ -74,22 +76,23 @@ TEMI DA MONITORARE:
 6. Societa' di noleggio auto - trasferimenti sedi, strategie fiscali, sentenze
 
 ISTRUZIONI OPERATIVE:
-- Usa la ricerca web. Cerca notizie pubblicate il {OGGI_ESTESA} o nelle ultime 24 ore.
+- Usa la ricerca web. Cerca notizie pubblicate dal {INIZIO_ESTESA} al {OGGI_ESTESA}.
 - Per ogni notizia inclusa: titolo, fonte con link, data di pubblicazione verificata, 2-3 righe di sintesi, impatto per una domiciliazione a Bolzano.
 - Scrivi in italiano, tono diretto. NIENTE preamboli tipo "Procedo con la redazione", "Ora cerco le notizie", ecc. Vai dritto al report.
 
-STRUTTURA DEL REPORT (in questo ordine esatto):
+STRUTTURA DEL REPORT:
 
-RASSEGNA STAMPA IPT NOLEGGIO AUTO - {OGGI}
+RASSEGNA STAMPA IPT NOLEGGIO AUTO
+Periodo: {INIZIO_ESTESA} - {OGGI_ESTESA}
 
-NOVITA' DEL GIORNO
-(solo notizie genuinamente nuove di oggi; se non ce ne sono, scrivi "Nessuna novita' rilevante in data odierna")
+NOVITA' DEL PERIODO
+(solo notizie genuinamente nuove rispetto allo storico; se nessuna, scrivi "Nessuna novita' rilevante nel periodo")
 
 AGGIORNAMENTI SU TEMI GIA' COPERTI
 (una riga per ogni aggiornamento, con link; se nessuno, scrivi "Nessun aggiornamento")
 
 RIEPILOGO
-1-2 frasi su cosa di nuovo e' emerso oggi. Se nulla, dillo esplicitamente."""
+2-3 frasi sulle novita' del periodo. Se nulla, dillo esplicitamente."""
 
 
 def genera_rassegna():
